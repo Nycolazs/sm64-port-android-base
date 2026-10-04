@@ -39,17 +39,18 @@ jobs:
             exit 1
           fi
 
-      - name: Disable Touch Overlay & Cap 30/60 FPS
+      - name: Strip Touch Buttons & Fix 120Hz
         run: |
-          # 1. Remove a renderização dos botões de toque no código Java
-          find app/src/main/java -name "*.java" -exec sed -i 's/showVirtualJoystick = true/showVirtualJoystick = false/g' {} + || true
-          find app/src/main/java -name "*.java" -exec sed -i 's/drawVirtualJoystick(canvas);/\/\/ drawVirtualJoystick(canvas);/g' {} + || true
-          find app/src/main/java -name "*.java" -exec sed -i 's/initVirtualJoystick()/true;/g' {} + || true
+          # 1. Neutraliza a renderização de botões nos fontes C/C++
+          # Substitui a função que desenha os botões touch por uma função vazia
+          find app/jni/src -name "*touch*" -type f -exec sed -i 's/void render_touch_controls(void) {/void render_touch_controls(void) { return;/g' {} + || true
+          find app/jni/src -name "*touch*" -type f -exec sed -i 's/void render_touch_controls()/void render_touch_controls() { return; } \/\//g' {} + || true
+          find app/jni/src -name "*touch*" -type f -exec sed -i 's/void touch_controls_render(void) {/void touch_controls_render(void) { return;/g' {} + || true
 
-          # 2. Desativa touch nos headers C/C++ caso existam
-          find app/jni -type f \( -name "*.c" -o -name "*.h" \) -exec sed -i 's/#define TOUCH_CONTROLS 1/#define TOUCH_CONTROLS 0/g' {} + || true
+          # 2. Neutraliza na chamada gráfica principal caso exista
+          find app/jni/src/pc/gfx -type f -exec sed -i 's/render_touch_controls();/\/\/ render_touch_controls();/g' {} + || true
 
-          # 3. Força o limitador de framerate para telas de alta taxa (120Hz)
+          # 3. Mantém a correção de 120Hz (desativa VSYNC destravado)
           find app/jni/src -name "gfx_sdl2.c" -exec sed -i 's/SDL_RENDERER_PRESENTVSYNC/0/g' {} + || true
 
       - name: Get SDL Sources
@@ -60,7 +61,7 @@ jobs:
       - name: Build SM64 Native Core
         run: |
           cd app/jni/src
-          make TOUCH_CONTROLS=0 --jobs $(nproc) || make --jobs $(nproc)
+          make --jobs $(nproc)
           cd ../../..
 
       - name: Build Android APK via Gradle
@@ -73,5 +74,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: sm64-android-gamepad-fixed
+          name: sm64-android-gamepad-clean
           path: app/build/outputs/apk/debug/*.apk
