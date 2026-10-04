@@ -1,0 +1,63 @@
+name: Build Android APK (Controller Only)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout repository with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r25c
+
+      - name: Install Build Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config git libusb-1.0-0-dev libsdl2-dev python3 libaudiofile-dev bsdmainutils
+
+      - name: Setup ROM in src folder
+        run: |
+          if [ -f "./baserom.us.z64" ]; then
+            cp ./baserom.us.z64 ./app/jni/src/baserom.us.z64
+            echo "ROM copiada para app/jni/src com sucesso:"
+            ls -lh ./app/jni/src/baserom.us.z64
+          else
+            echo "ERRO: baserom.us.z64 nao encontrada na raiz!"
+            exit 1
+          fi
+
+      - name: Get SDL Sources
+        run: |
+          chmod +x ./getSDL.sh
+          ./getSDL.sh
+
+      - name: Build SM64 Native Core
+        run: |
+          cd app/jni/src
+          make TOUCH_CONTROLS=0 --jobs $(nproc) || make --jobs $(nproc)
+          cd ../../..
+
+      - name: Build Android APK
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: sm64-android-gamepad
+          path: app/build/outputs/apk/debug/*.apk
