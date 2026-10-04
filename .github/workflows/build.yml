@@ -42,16 +42,16 @@ jobs:
       - name: Strip Touch Buttons & Fix 120Hz
         run: |
           # 1. Neutraliza a renderização de botões nos fontes C/C++
-          # Substitui a função que desenha os botões touch por uma função vazia
           find app/jni/src -name "*touch*" -type f -exec sed -i 's/void render_touch_controls(void) {/void render_touch_controls(void) { return;/g' {} + || true
           find app/jni/src -name "*touch*" -type f -exec sed -i 's/void render_touch_controls()/void render_touch_controls() { return; } \/\//g' {} + || true
           find app/jni/src -name "*touch*" -type f -exec sed -i 's/void touch_controls_render(void) {/void touch_controls_render(void) { return;/g' {} + || true
-
-          # 2. Neutraliza na chamada gráfica principal caso exista
           find app/jni/src/pc/gfx -type f -exec sed -i 's/render_touch_controls();/\/\/ render_touch_controls();/g' {} + || true
 
-          # 3. Mantém a correção de 120Hz (desativa VSYNC destravado)
+          # 2. Mantém a taxa de quadros estável em telas de 120Hz
           find app/jni/src -name "gfx_sdl2.c" -exec sed -i 's/SDL_RENDERER_PRESENTVSYNC/0/g' {} + || true
+
+          # 3. Ajusta Target SDK no build.gradle para evitar rejeição do Android
+          find app -name "build.gradle" -exec sed -i 's/targetSdkVersion [0-9]\+/targetSdkVersion 33/g' {} + || true
 
       - name: Get SDL Sources
         run: |
@@ -69,7 +69,7 @@ jobs:
           chmod +x gradlew
           export ANDROID_NDK_HOME="${ANDROID_NDK_ROOT}"
           export NDK="${ANDROID_NDK_ROOT}"
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew clean assembleDebug --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
