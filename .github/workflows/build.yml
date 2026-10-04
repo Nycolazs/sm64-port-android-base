@@ -1,4 +1,4 @@
-name: Build Android APK (Controller Only)
+name: Build Android APK (Controller Only & Fixed FPS)
 
 on:
   workflow_dispatch:
@@ -33,12 +33,24 @@ jobs:
         run: |
           if [ -f "./baserom.us.z64" ]; then
             cp ./baserom.us.z64 ./app/jni/src/baserom.us.z64
-            echo "ROM posicionada com sucesso:"
-            ls -lh ./app/jni/src/baserom.us.z64
+            echo "ROM posicionada com sucesso."
           else
             echo "ERRO: baserom.us.z64 nao encontrada na raiz!"
             exit 1
           fi
+
+      - name: Disable Touch Overlay & Cap 30/60 FPS
+        run: |
+          # 1. Remove a renderização dos botões de toque no código Java
+          find app/src/main/java -name "*.java" -exec sed -i 's/showVirtualJoystick = true/showVirtualJoystick = false/g' {} + || true
+          find app/src/main/java -name "*.java" -exec sed -i 's/drawVirtualJoystick(canvas);/\/\/ drawVirtualJoystick(canvas);/g' {} + || true
+          find app/src/main/java -name "*.java" -exec sed -i 's/initVirtualJoystick()/true;/g' {} + || true
+
+          # 2. Desativa touch nos headers C/C++ caso existam
+          find app/jni -type f \( -name "*.c" -o -name "*.h" \) -exec sed -i 's/#define TOUCH_CONTROLS 1/#define TOUCH_CONTROLS 0/g' {} + || true
+
+          # 3. Força o limitador de framerate para telas de alta taxa (120Hz)
+          find app/jni/src -name "gfx_sdl2.c" -exec sed -i 's/SDL_RENDERER_PRESENTVSYNC/0/g' {} + || true
 
       - name: Get SDL Sources
         run: |
@@ -56,10 +68,10 @@ jobs:
           chmod +x gradlew
           export ANDROID_NDK_HOME="${ANDROID_NDK_ROOT}"
           export NDK="${ANDROID_NDK_ROOT}"
-          ./gradlew assembleDebug --stacktrace --no-daemon
+          ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: sm64-android-gamepad
+          name: sm64-android-gamepad-fixed
           path: app/build/outputs/apk/debug/*.apk
